@@ -3,7 +3,7 @@ import re
 import time
 import logging
 from typing import Dict, List, Optional, Any
-from fxiaoke_auth import FxiaokeAuthManager
+from .fxiaoke_auth import FxiaokeAuthManager
 
 logger = logging.getLogger(__name__)
 

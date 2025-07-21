@@ -3,7 +3,7 @@ import time
 import logging
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, timedelta
-from fxiaoke_auth import FxiaokeAuthManager
+from .fxiaoke_auth import FxiaokeAuthManager
 
 logger = logging.getLogger(__name__)
 
@@ -47,77 +47,58 @@ class FxiaokeCRMDataClient:
             'lastRequestTime': 0
         }
     
-    async def find_simple_data(self, params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    async def find_simple_data(
+        self,
+        currentOpenUserId: str,
+        dataObjectApiName: str,
+        fieldProjection: Optional[List[str]] = None,
+        searchQueryInfo: Optional[Dict[str, Any]] = None,
+        ignoreMediaIdConvert: bool = False,
+        **kwargs
+    ) -> List[Dict[str, Any]]:
         """
-        查询CRM业务对象数据
-        
+        通用查询CRM任意对象数据
         Args:
-            params: 查询参数
-                - currentOpenUserId: 当前用户ID
-                - dataObjectApiName: 对象ApiName
-                - fieldProjection: 返回数据中包含的字段，为空则返回所有字段
-                - searchQueryInfo: 查询条件
-                    - limit: 查询条数
-                    - offset: 查询开始偏移量
-                    - filters: 查询条件
-                        - field_name: 字段apiName
-                        - field_values: 字段值
-                        - operator: 操作符
-                    - orders: 排序
-                        - fieldName: 排序字段
-                        - isAsc: 是否升序
-                - igonreMediaIdConvert: 是否忽略转换MediaId
-                
+            currentOpenUserId: 当前用户ID
+            dataObjectApiName: 对象ApiName
+            fieldProjection: 返回字段列表
+            searchQueryInfo: 查询条件，需要通过build_search_query_info方法构建
+            ignoreMediaIdConvert: 是否忽略MediaId转换
+            kwargs: 其他可选参数
         Returns:
-            返回数据数组
+            数据列表
         """
-        try:
-            # 验证必需参数
-            self.validate_params(params)
-            
-            # 获取认证信息
-            auth_info = await self.auth_manager.get_corp_access_token()
-            
-            # 构建请求数据
-            request_data = {
-                'corpAccessToken': auth_info['corpAccessToken'],
-                'corpId': auth_info['corpId'],
-                'currentOpenUserId': params['currentOpenUserId'],
-                'data': {
-                    'dataObjectApiName': params['dataObjectApiName'],
-                    'field_projection': params.get('fieldProjection', []),
-                    'igonreMediaIdConvert': params.get('igonreMediaIdConvert', False),
-                    'search_query_info': self.build_search_query_info(params.get('searchQueryInfo'))
-                }
-            }
+        if not currentOpenUserId:
+            raise ValueError('currentOpenUserId是必需参数')
+        if not dataObjectApiName:
+            raise ValueError('dataObjectApiName是必需参数')
 
-            logger.info('[FxiaokeCRMData] 请求业务对象数据，参数: %s', {
-                'corpId': auth_info['corpId'],
-                'currentOpenUserId': params['currentOpenUserId'],
-                'dataObjectApiName': params['dataObjectApiName'],
-                'fieldProjection': len(params.get('fieldProjection', [])),
-                'limit': params.get('searchQueryInfo', {}).get('limit'),
-                'offset': params.get('searchQueryInfo', {}).get('offset')
-            })
+        auth_info = await self.auth_manager.get_corp_access_token()
+        data = {
+            'dataObjectApiName': dataObjectApiName,
+            'ignoreMediaIdConvert': ignoreMediaIdConvert
+        }
+        if fieldProjection is not None:
+            data['field_projection'] = fieldProjection
+        if searchQueryInfo is not None:
+            data['search_query_info'] = searchQueryInfo
 
-            # 发送请求
-            response = await self.request_with_rate_limit(
-                '/cgi/crm/custom/v2/data/findSimple',
-                request_data
-            )
-            
-            logger.info('[FxiaokeCRMData] 业务对象数据查询成功')
-            
-            # 提取数据数组并返回
-            if response.get('data') and response['data'].get('dataList'):
-                return response['data']['dataList']
-            else:
-                logger.warning('[FxiaokeCRMData] 响应中没有找到dataList，返回空数组')
-                return []
-            
-        except Exception as error:
-            logger.error(f'[FxiaokeCRMData] 查询业务对象数据失败: {str(error)}')
-            raise
+        request_data = {
+            'corpAccessToken': auth_info['corpAccessToken'],
+            'corpId': auth_info['corpId'],
+            'currentOpenUserId': currentOpenUserId,
+            'data': data
+        }
+
+        logger.info('[FxiaokeCRMData] 请求业务对象数据，参数: %s', request_data)
+        response = await self.request_with_rate_limit(
+            '/cgi/crm/custom/v2/data/findSimple',
+            request_data
+        )
+        if response.get('code', 0) != 0:
+            logger.error(f"[FxiaokeCRMData] API返回错误: {response.get('msg')}")
+            raise Exception(f"API Error: {response.get('msg')}")
+        return response.get('data', {}).get('dataList', [])
     
     def build_search_query_info(self, search_query_info: Dict[str, Any] = None) -> Dict[str, Any]:
         """
@@ -254,66 +235,6 @@ class FxiaokeCRMDataClient:
         
         raise Exception(f"请求失败，已重试{self.retry_config['maxRetries']}次: {str(last_error)}")
     
-    async def find_customer_data(self, params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """
-        查询客户数据
-        
-        Args:
-            params: 查询参数
-                - currentOpenUserId: 当前用户ID
-                - fields: 返回字段列表
-                - limit: 查询条数
-                - offset: 查询偏移量
-                - filters: 过滤条件
-                - orders: 排序条件
-                
-        Returns:
-            客户数据列表
-        """
-        try:
-            params = params or {}
-            params['dataObjectApiName'] = 'Customer'
-            return await self.find_simple_data(params)
-        except Exception as error:
-            logger.error(f'[FxiaokeCRMData] 查询客户数据失败: {str(error)}')
-            raise
-    
-    async def find_contact_data(self, params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """
-        查询联系人数据
-        
-        Args:
-            params: 查询参数（同find_customer_data）
-                
-        Returns:
-            联系人数据列表
-        """
-        try:
-            params = params or {}
-            params['dataObjectApiName'] = 'Contact'
-            return await self.find_simple_data(params)
-        except Exception as error:
-            logger.error(f'[FxiaokeCRMData] 查询联系人数据失败: {str(error)}')
-            raise
-    
-    async def find_opportunity_data(self, params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-        """
-        查询销售机会数据
-        
-        Args:
-            params: 查询参数（同find_customer_data）
-                
-        Returns:
-            销售机会数据列表
-        """
-        try:
-            params = params or {}
-            params['dataObjectApiName'] = 'Opportunity'
-            return await self.find_simple_data(params)
-        except Exception as error:
-            logger.error(f'[FxiaokeCRMData] 查询销售机会数据失败: {str(error)}')
-            raise
-    
     async def find_data_by_time_range(self, params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """
         根据时间范围查询数据
@@ -365,7 +286,7 @@ class FxiaokeCRMDataClient:
                 'searchQueryInfo': search_query_info
             }
             
-            return await self.find_simple_data(query_params)
+            return await self.find_simple_data(query_params['currentOpenUserId'], query_params['dataObjectApiName'], query_params['fieldProjection'], query_params['searchQueryInfo'])
             
         except Exception as error:
             logger.error(f'[FxiaokeCRMData] 根据时间范围查询数据失败: {str(error)}')

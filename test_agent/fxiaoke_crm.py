@@ -2,7 +2,7 @@ import requests
 import time
 import logging
 from typing import Dict, List, Optional, Any
-from fxiaoke_auth import FxiaokeAuthManager
+from .fxiaoke_auth import FxiaokeAuthManager
 
 logger = logging.getLogger(__name__)
 
@@ -147,22 +147,18 @@ class FxiaokeCRMClient:
             中文描述列表，每个对象包含以下字段：
             - apiName: 对象的API名称
             - displayName: 对象的中文显示名称
-            - defineType: 对象定义类型
             - isActive: 对象是否激活
-            - publicObject: 是否为公共对象
         """
         try:
             objects = await self.get_crm_object_list(params)
             
             if isinstance(objects, list):
-                # 提取所有对象的中文描述
+                # 提取所有对象的中文描述，只返回指定字段
                 descriptions = [
                     {
                         'apiName': obj['describeApiName'],
                         'displayName': obj['describeDisplayName'],
-                        'defineType': obj['defineType'],
-                        'isActive': obj['isActive'],
-                        'publicObject': obj['publicObject']
+                        'isActive': obj['isActive']
                     }
                     for obj in objects
                     if obj.get('isActive') and obj.get('describeDisplayName')
@@ -237,7 +233,10 @@ class FxiaokeCRMClient:
                 'corpAccessToken': auth_info['corpAccessToken'],
                 'corpId': auth_info['corpId'],
                 'currentOpenUserId': current_open_user_id,
-                'apiName': api_name
+                'data': {
+                    'includeDetail': params.get('includeDetail', True),
+                    'apiName': api_name
+                }
             }
 
             logger.info('[FxiaokeCRM] 请求对象描述，参数: %s', {
@@ -333,25 +332,57 @@ class FxiaokeCRMClient:
         Returns:
             字段信息列表
         """
-        fields = []
-        
-        if describe_info.get('data') and describe_info['data'].get('fields'):
-            for field in describe_info['data']['fields']:
-                field_info = {
-                    'apiName': field.get('apiName'),
-                    'label': field.get('label'),
-                    'type': field.get('type'),
-                    'description': field.get('description', ''),
-                    'isRequired': field.get('isRequired', False),
-                    'helpText': field.get('helpText', ''),
-                    'isActive': field.get('isActive', True),
-                    'defineType': field.get('defineType'),
-                    'defaultValue': field.get('defaultValue'),
-                    'options': field.get('options', [])
+        try:
+            if not describe_info.get('data') or not describe_info['data'].get('describe') or not describe_info['data']['describe'].get('fields'):
+                return []
+            
+            fields = describe_info['data']['describe']['fields']
+            field_list = []
+            
+            for field_api_name, field_info in fields.items():
+                field = {
+                    'apiName': field_api_name,
+                    'label': field_info.get('label', ''),
+                    'type': field_info.get('type', ''),
+                    'description': field_info.get('description', ''),
+                    'isRequired': field_info.get('is_required', False),
+                    'helpText': field_info.get('help_text', ''),
+                    'isActive': field_info.get('is_active', True),
+                    'defineType': field_info.get('define_type', ''),
+                    'defaultValue': field_info.get('default_value', '')
                 }
-                fields.append(field_info)
-        
-        return fields
+                
+                # 处理选择字段的选项
+                if field_info.get('type') == 'select_one' and field_info.get('options'):
+                    field['options'] = [
+                        {
+                            'label': option.get('label'),
+                            'value': option.get('value'),
+                            'feKey': option.get('fe_key')
+                        }
+                        for option in field_info['options']
+                    ]
+                
+                # 处理对象引用字段
+                if field_info.get('type') == 'object_reference' and field_info.get('target_api_name'):
+                    field['targetApiName'] = field_info.get('target_api_name')
+                    field['targetRelatedListName'] = field_info.get('target_related_list_name')
+                    field['targetRelatedListLabel'] = field_info.get('target_related_list_label')
+                
+                # 处理文件附件字段
+                if field_info.get('type') == 'file_attachment':
+                    field['fileSizeLimit'] = field_info.get('file_size_limit')
+                    field['fileAmountLimit'] = field_info.get('file_amount_limit')
+                    field['supportFileTypes'] = field_info.get('support_file_types', [])
+                    field['supportFileSuffix'] = field_info.get('support_file_suffix', [])
+                
+                field_list.append(field)
+            
+            return field_list
+            
+        except Exception as error:
+            logger.error(f'[FxiaokeCRM] 提取字段信息失败: {str(error)}')
+            return []
     
     def filter_fields(self, fields: List[Dict[str, Any]], params: Dict[str, Any] = None) -> List[Dict[str, Any]]:
         """

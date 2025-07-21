@@ -10,10 +10,12 @@
 - fxiaoke_crm_data: CRM数据查询类
 """
 
-from fxiaoke_auth import FxiaokeAuthManager
-from fxiaoke_user import FxiaokeUserManager
-from fxiaoke_crm import FxiaokeCRMClient
-from fxiaoke_crm_data import FxiaokeCRMDataClient
+from .fxiaoke_auth import FxiaokeAuthManager
+from .fxiaoke_user import FxiaokeUserManager
+from .fxiaoke_crm import FxiaokeCRMClient
+from .fxiaoke_crm_data import FxiaokeCRMDataClient
+
+from . import agent
 
 __version__ = "1.0.0"
 __author__ = "纷享销客CRM工具"

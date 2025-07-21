@@ -8,6 +8,7 @@
 - **用户管理** (`FxiaokeUserManager`): 根据手机号获取用户信息
 - **CRM对象管理** (`FxiaokeCRMClient`): 获取CRM对象列表和字段信息
 - **CRM数据查询** (`FxiaokeCRMDataClient`): 查询CRM业务对象数据
+- **统一服务类** (`FxiaokeCRMService`): 提供简化的统一接口
 
 ## 主要特性
 
@@ -18,11 +19,73 @@
 - ✅ 详细的日志记录
 - ✅ 模块化设计，易于扩展
 - ✅ 异步支持，提高性能
+- ✅ 统一的服务接口，简化使用
 
 ## 安装依赖
 
 ```bash
 pip install -r requirements.txt
+```
+
+## 快速开始
+
+### 使用统一的FxiaokeCRMService类（推荐）
+
+```python
+import asyncio
+from index_run import FxiaokeCRMService, generate_field_projection
+
+async def main():
+    # 配置信息
+    config = {
+        'appId': 'your_app_id',
+        'appSecret': 'your_app_secret',
+        'permanentCode': 'your_permanent_code'
+    }
+    
+    # 创建CRM服务实例
+    crm_service = FxiaokeCRMService(config)
+    
+    try:
+        # 1. 获取用户ID
+        user_id = await crm_service.get_user_id_by_mobile('13800138000')
+        
+        # 2. 获取所有CRM对象
+        crm_objects = await crm_service.get_crm_objects(user_id)
+        
+        # 3. 获取指定对象的字段信息
+        if crm_objects:
+            object_api_name = crm_objects[0]['apiName']
+            fields = await crm_service.get_object_fields(user_id, object_api_name)
+            
+            # 4. 生成字段投影
+            field_labels = ['名称', '创建时间']  # 根据实际字段标签调整
+            field_projection = generate_field_projection(fields, field_labels)
+            
+            # 5. 查询数据
+            data = await crm_service.query_object_data(
+                user_id, 
+                object_api_name, 
+                field_projection, 
+                limit=10
+            )
+            
+            print(f"查询到 {len(data)} 条数据")
+            
+    finally:
+        # 清理资源
+        crm_service.destroy()
+
+# 运行
+asyncio.run(main())
+```
+
+### 查看完整示例
+
+运行 `example_usage.py` 查看详细的使用示例：
+
+```bash
+python example_usage.py
 ```
 
 ## 使用方法
