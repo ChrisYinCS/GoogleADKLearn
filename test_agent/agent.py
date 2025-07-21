@@ -11,6 +11,7 @@ from google.adk.sessions import InMemorySessionService
 from google.adk.runners import Runner
 from google.genai import types 
 import datetime
+from typing import Optional
 
 # 启用 LiteLLM 调试模式
 import litellm
@@ -86,7 +87,13 @@ async def get_object_fields(user_id: str, object_api_name: str) -> list:
     
     return await crm_service.get_object_fields(user_id, object_api_name)
 
-async def query_object_data(user_id: str, object_api_name: str, field_projection: list, limit: int = 10, offset: int = 0) -> list:
+async def query_object_data(
+    user_id: str,
+    object_api_name: str,
+    field_projection: list,
+    search_query_info: Optional[dict] = None,
+    ignore_media_id_convert: bool = False
+) -> list:
     """
     Queries data for a specified CRM object with field projection.
 
@@ -94,8 +101,8 @@ async def query_object_data(user_id: str, object_api_name: str, field_projection
         user_id (str): The ID of the current user.
         object_api_name (str): The API name of the CRM object to query.
         field_projection (list): List of field names to include in the query results.
-        limit (int, optional): Maximum number of records to return. Defaults to 10.
-        offset (int, optional): Number of records to skip. Defaults to 0.
+        search_query_info (dict, optional): Query conditions, e.g. limit, offset, filters, orders, etc.
+        ignore_media_id_convert (bool, optional): Whether to ignore media ID conversion. Defaults to False.
 
     Returns:
         list: A list of dictionaries containing the queried CRM data records.
@@ -107,12 +114,18 @@ async def query_object_data(user_id: str, object_api_name: str, field_projection
         raise ValueError("object_api_name must be a non-empty string")
     if not isinstance(field_projection, list):
         raise ValueError("field_projection must be a list")
-    if not isinstance(limit, int) or limit < 1:
-        limit = 10
-    if not isinstance(offset, int) or offset < 0:
-        offset = 0
-    
-    return await crm_service.query_object_data(user_id, object_api_name, field_projection, limit, offset)
+    if search_query_info is not None and not isinstance(search_query_info, dict):
+        raise ValueError("search_query_info must be a dict or None")
+    if not isinstance(ignore_media_id_convert, bool):
+        raise ValueError("ignore_media_id_convert must be a bool")
+
+    return await crm_service.query_object_data(
+        user_id,
+        object_api_name,
+        field_projection,
+        search_query_info or {},
+        ignore_media_id_convert
+    )
 
 async def get_user_by_mobile(mobile: str) -> dict:
     """

@@ -1,9 +1,9 @@
 import logging
-from typing import List, Dict, Any
-from .fxiaoke_auth import FxiaokeAuthManager
-from .fxiaoke_user import FxiaokeUserManager
-from .fxiaoke_crm import FxiaokeCRMClient
-from .fxiaoke_crm_data import FxiaokeCRMDataClient
+from typing import List, Dict, Any, Optional
+from fxiaoke_auth import FxiaokeAuthManager
+from fxiaoke_user import FxiaokeUserManager
+from fxiaoke_crm import FxiaokeCRMClient
+from fxiaoke_crm_data import FxiaokeCRMDataClient
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -134,30 +134,61 @@ class FxiaokeCRMService:
         return filtered_fields
     
 
-    async def query_object_data(self, user_id: str, object_api_name: str, 
-                               field_projection: List[str], search_query_info: Dict[str, Any]
-                               ) -> List[Dict[str, Any]]:
+    async def query_object_data(
+        self,
+        currentOpenUserId: str,
+        dataObjectApiName: str,
+        fieldProjection: List[str],
+        ignoreMediaIdConvert: Optional[bool] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+        field_name: Optional[str] = None,
+        field_values: Optional[List[str]] = None,
+        operator: Optional[str] = None,
+        fieldName: Optional[str] = None,
+        isAsc: Optional[bool] = None,
+    ) -> List[Dict[str, Any]]:
         """
         查询指定对象的数据
         
         Args:
-            user_id: 用户ID
-            object_api_name: 对象API名称
-            field_projection: 字段投影列表
-            search_query_info: 详细查询条件，需要通过build_search_query_info方法构建
-            
+            currentOpenUserId (str): 用户ID，必填。可通过get_user_id_by_mobile方法获取                        
+            igonreMediaIdConvert (bool): 是否忽略媒体ID转换。选填。true不转换;false或不传则会将npath转换为mediaId
+            dataObjectApiName (str): 对象API名称，必填。可通过get_crm_objects方法获取
+            limit (int): 查询条数，选填
+            offset (int): 查询开始偏移量，选填
+            field_name (str): 字段apiName，选填
+            field_values (List[str]): 字段值，选填
+            operator (str): 操作符，选填
+            fieldName (str): 排序字段，选填
+            isAsc (bool): 是否升序，选填
+            field_projection (List[str]): 字段投影列表，必填
+
         Returns:
             查询结果数据列表
         """
         if not self.crm_data_client:
             await self.initialize()
-        
-        
+
+        searchQueryInfo = {
+            'limit': limit,
+            'offset': offset,
+            'filters': {
+                'field_name': field_name,
+                'field_values': field_values,
+                'operator': operator
+            },
+            'orders': {
+                'fieldName': fieldName,
+                'isAsc': isAsc
+            }
+        }
         return await self.crm_data_client.find_simple_data(
-            currentOpenUserId=user_id,
-            dataObjectApiName=object_api_name,
-            fieldProjection=field_projection,
-            searchQueryInfo=search_query_info
+            currentOpenUserId=currentOpenUserId,
+            dataObjectApiName=dataObjectApiName,
+            fieldProjection=fieldProjection,
+            searchQueryInfo=searchQueryInfo,
+            ignoreMediaIdConvert=ignoreMediaIdConvert or False
         )
     
     async def get_user_by_mobile(self, mobile: str) -> Dict[str, Any]:

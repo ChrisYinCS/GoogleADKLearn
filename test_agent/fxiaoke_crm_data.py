@@ -3,7 +3,7 @@ import time
 import logging
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, timedelta
-from .fxiaoke_auth import FxiaokeAuthManager
+from fxiaoke_auth import FxiaokeAuthManager
 
 logger = logging.getLogger(__name__)
 
@@ -53,18 +53,18 @@ class FxiaokeCRMDataClient:
         dataObjectApiName: str,
         fieldProjection: Optional[List[str]] = None,
         searchQueryInfo: Optional[Dict[str, Any]] = None,
-        ignoreMediaIdConvert: bool = False,
-        **kwargs
+        ignoreMediaIdConvert: Optional[bool] = None,
     ) -> List[Dict[str, Any]]:
         """
         通用查询CRM任意对象数据
+        
         Args:
             currentOpenUserId: 当前用户ID
             dataObjectApiName: 对象ApiName
             fieldProjection: 返回字段列表
             searchQueryInfo: 查询条件，需要通过build_search_query_info方法构建
             ignoreMediaIdConvert: 是否忽略MediaId转换
-            kwargs: 其他可选参数
+
         Returns:
             数据列表
         """
